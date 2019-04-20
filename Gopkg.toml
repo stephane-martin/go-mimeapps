@@ -28,6 +28,9 @@
   name = "github.com/go-ini/ini"
   version = "1.42.0"
 
+[[constraint]]
+  name = "github.com/gdamore/tcell"
+  version = "1.1.1"
 
 [prune]
   go-tests = true

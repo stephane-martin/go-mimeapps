@@ -47,6 +47,31 @@ func XDG() (dirs XDGDirs, err error) {
 	return dirs, nil
 }
 
+func DefaultsPathsList() ([]string, error) {
+	dirs, err := XDG()
+	if err != nil {
+		return nil, err
+	}
+	var defaults, dirnames []string
+	dirnames = append(dirnames, dirs.DataHome)
+	dirnames = append(dirnames, dirs.DataDirs...)
+	for _, dirname := range dirnames {
+		dirname = filepath.Join(dirname, "applications")
+		if DirExists(dirname) {
+			filename := filepath.Join(dirname, "defaults.list")
+			if FileExists(filename) {
+				defaults = append(defaults, filename)
+			}
+			filename = filepath.Join(dirname, "mimeinfo.cache")
+			if FileExists(filename) {
+				defaults = append(defaults, filename)
+			}
+
+		}
+	}
+	return defaults, nil
+}
+
 func MimeAppsPathsList() ([]string, error) {
 	dirs, err := XDG()
 	if err != nil {

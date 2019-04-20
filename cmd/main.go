@@ -11,10 +11,16 @@ func main() {
 	if len(os.Args) < 2 {
 		return
 	}
-	app, err := mimeapps.FilenameToApplication(os.Args[1])
+	filename := os.Args[1]
+	f, err := os.Open(filename)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	fmt.Println(app)
+	err = mimeapps.OpenRemote(filename, f)
+	_ = f.Close()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 }
