@@ -17,7 +17,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	err = mimeapps.OpenRemote(filename, f)
+	_, err = mimeapps.OpenRemote(filename, f)
 	_ = f.Close()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

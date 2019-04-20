@@ -2,15 +2,50 @@ package mimeapps
 
 import (
 	"errors"
+	"fmt"
 	"mime"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-ini/ini"
 )
 
-func MimeTypeToDesktop(mimetype string) (string, error) {
+type ErrUnknownType struct {
+	Filename string
+}
+
+func (e ErrUnknownType) Error() string {
+	return fmt.Sprintf("unknown type: %s", e.Filename)
+}
+
+type ErrNoDesktopEntry struct {
+	Mimetype string
+}
+
+func (e ErrNoDesktopEntry) Error() string {
+	return fmt.Sprintf("no desktop entry was found for mimetype: %s", e.Mimetype)
+}
+
+type ErrDesktopFileNotFound struct {
+	EntryName string
+}
+
+func (e ErrDesktopFileNotFound) Error() string {
+	return fmt.Sprintf("no matching desktop file was found for desktop entry: %s", e.EntryName)
+}
+
+type ErrInvalidDesktopFile struct {
+	Path   string
+	Reason string
+}
+
+func (e ErrInvalidDesktopFile) Error() string {
+	return fmt.Sprintf("desktop entry %s is invalid because: %s", filepath.Base(e.Path), e.Reason)
+}
+
+func MimetypeToDesktopEntry(mimetype string) (string, error) {
 	var section *ini.Section
 	list, err := MimeAppsPathsList()
 	if err != nil {
@@ -43,27 +78,30 @@ func MimeTypeToDesktop(mimetype string) (string, error) {
 		} else {
 			section, err = f.GetSection("MIME Cache")
 		}
-		if err == nil {
-			k := section.Key(mimetype)
-			if k != nil && k.String() != "" {
-				return strings.SplitN(k.String(), ";", 2)[0], nil
+		if err != nil {
+			continue
+		}
+		k := section.Key(mimetype)
+		if k != nil && k.String() != "" {
+			desktop := strings.TrimSpace(strings.SplitN(k.String(), ";", 2)[0])
+			if desktop != "" {
+				return desktop, nil
 			}
 		}
-
 	}
 
-	return "", nil
+	return "", ErrNoDesktopEntry{Mimetype: mimetype}
 }
 
 var ErrFound = errors.New("found")
 
-func MimeTypeToDesktopPath(mimetype string) (string, error) {
+func MimetypeToDesktopFile(mimetype string) (string, error) {
 	xdg, err := XDG()
 	if err != nil {
 		return "", err
 	}
-	desktopFile, err := MimeTypeToDesktop(mimetype)
-	if err != nil || desktopFile == "" {
+	desktopEntry, err := MimetypeToDesktopEntry(mimetype)
+	if err != nil {
 		return "", err
 	}
 	var search []string
@@ -80,10 +118,10 @@ func MimeTypeToDesktopPath(mimetype string) (string, error) {
 	desktopFilePath := ""
 	for _, dirname := range search {
 		err := filepath.Walk(dirname, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
+			if err != nil || info.IsDir() {
 				return nil
 			}
-			if filepath.Base(path) == desktopFile {
+			if filepath.Base(path) == desktopEntry {
 				desktopFilePath = path
 				return ErrFound
 			}
@@ -93,12 +131,15 @@ func MimeTypeToDesktopPath(mimetype string) (string, error) {
 			break
 		}
 	}
+	if desktopFilePath == "" {
+		return "", ErrDesktopFileNotFound{EntryName: desktopEntry}
+	}
 	return desktopFilePath, nil
 }
 
 func MimeTypeToApplication(mimetype string) (string, bool, error) {
-	path, err := MimeTypeToDesktopPath(mimetype)
-	if err != nil || path == "" {
+	path, err := MimetypeToDesktopFile(mimetype)
+	if err != nil {
 		return path, false, err
 	}
 	f, err := ini.Load(path)
@@ -107,7 +148,7 @@ func MimeTypeToApplication(mimetype string) (string, bool, error) {
 	}
 	section, err := f.GetSection("Desktop Entry")
 	if err != nil {
-		return "", false, nil
+		return "", false, ErrInvalidDesktopFile{Path: path, Reason: "section Desktop Entry is absent"}
 	}
 	k := section.Key("Exec")
 	if k != nil && k.String() != "" {
@@ -117,25 +158,31 @@ func MimeTypeToApplication(mimetype string) (string, bool, error) {
 		}
 		return k.String(), false, nil
 	}
-	return "", false, nil
+	return "", false, ErrInvalidDesktopFile{Path: path, Reason: "no Exec key"}
 }
 
 func FilenameToApplication(filename string) ([]string, bool, error) {
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		return nil, false, nil
+	var (
+		m   string
+		err error
+	)
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext != "" {
+		m = mime.TypeByExtension(ext)
 	}
-	m := mime.TypeByExtension(strings.ToLower(ext))
 	if m == "" {
-		return nil, false, nil
+		m, _, err = mimetype.DetectFile(filename)
+		if m == "" || m == "application/octet-stream" || err != nil {
+			return nil, false, ErrUnknownType{Filename: filename}
+		}
 	}
-	m = strings.SplitN(m, ";", 2)[0]
-	app, terminal, err := MimeTypeToApplication(m)
+	mt, _, err := mime.ParseMediaType(m)
 	if err != nil {
 		return nil, false, err
 	}
-	if app == "" {
-		return nil, false, nil
+	app, terminal, err := MimeTypeToApplication(mt)
+	if err != nil {
+		return nil, false, err
 	}
 	return Scan(app), terminal, nil
 }

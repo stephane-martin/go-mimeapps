@@ -2,6 +2,18 @@
 
 
 [[projects]]
+  digest = "1:ae83f1cc506f08fb15b70ab890d8b12ce0621ad3cafbef072e4d6151506e1ed8"
+  name = "github.com/gabriel-vasile/mimetype"
+  packages = [
+    ".",
+    "internal/json",
+    "internal/matchers",
+  ]
+  pruneopts = "UT"
+  revision = "db305cf4981bf55d50593934f8da422d6ffdeba9"
+  version = "v0.3.2"
+
+[[projects]]
   digest = "1:0e16b03c72bd42739ca68d055c10369e60d17838428f512f3b29ae115ba788e0"
   name = "github.com/gdamore/encoding"
   packages = ["."]
@@ -62,6 +74,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/gabriel-vasile/mimetype",
     "github.com/gdamore/tcell",
     "github.com/go-ini/ini",
   ]
